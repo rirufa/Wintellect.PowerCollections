@@ -10,6 +10,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 // CONSIDER: provide more efficient implementation of CopyTo.
 
@@ -1837,7 +1838,7 @@ namespace Wintellect.PowerCollections
             /// Array that stores the items in the nodes. Always has a least "count" elements,
             /// but may have more as padding.
             /// </summary>
-            public T[] items;
+            public List<T> items;
 
             public LeafNode Next { get; set; }
 
@@ -1851,7 +1852,7 @@ namespace Wintellect.PowerCollections
             {
                 // CONSIDER: is MAXLEAF always the right thing to do? It seems to work well in most cases.
                 count = 1;
-                items = new T[MAXLEAF];
+                items = new List<T>(MAXLEAF);
                 items[0] = item;
             }
 
@@ -1867,7 +1868,9 @@ namespace Wintellect.PowerCollections
                 Debug.Assert(newItems.Length <= MAXLEAF);
 
                 this.count = count;
-                items = newItems;
+                items = new List<T>(MAXLEAF);
+                var list = (List<T>)items;
+                list.AddRange(newItems);
             }
 
             public override int Depth
@@ -1911,7 +1914,7 @@ namespace Wintellect.PowerCollections
             /// <returns>A new node with the given item changed.</returns>
             public override Node SetAt(int index, T item)
             {
-                T[] newItems = (T[])items.Clone();
+                T[] newItems = items.ToArray<T>();
                 newItems[index] = item;
                 return new LeafNode(count, newItems);
             }
@@ -1930,12 +1933,13 @@ namespace Wintellect.PowerCollections
                 int newCount;
                 if (otherLeaf != null && (newCount = otherLeaf.Count + this.count) <= MAXLEAF) {
                     // Combine the two leaf nodes into one.
-                    if (newCount > items.Length) {
+                    if (newCount > items.Count) {
                         T[] newItems = new T[MAXLEAF];
-                        Array.Copy(items, 0, newItems, 0, count);
-                        items = newItems;
+                        items.CopyTo(0, newItems, 0, count);
+                        items = new List<T>(MAXLEAF);
+                        items.AddRange(newItems);
                     }
-                    Array.Copy(otherLeaf.items, 0, items, count, otherLeaf.count);
+                    items.AddRange(otherLeaf.items);
                     count = newCount;
                     return true;
                 }
@@ -1958,8 +1962,8 @@ namespace Wintellect.PowerCollections
                 if (otherLeaf != null && (newCount = otherLeaf.Count + this.count) <= MAXLEAF) {
                     // Combine the two leaf nodes into one.
                     T[] newItems = new T[MAXLEAF];
-                    Array.Copy(items, 0, newItems, 0, count);
-                    Array.Copy(otherLeaf.items, 0, newItems, count, otherLeaf.count);
+                    items.CopyTo(0, newItems, 0, count);
+                    otherLeaf.items.CopyTo(0,newItems,count,otherLeaf.count);
                     return new LeafNode(newCount, newItems);
                 }
                 return null;
@@ -1980,16 +1984,7 @@ namespace Wintellect.PowerCollections
 
                 // Add into the current leaf, if possible.
                 if (count < MAXLEAF) {
-                    if (count == items.Length) {
-                        T[] newItems = new T[MAXLEAF];
-                        Array.Copy(items, 0, newItems, 1, count);
-                        items = newItems;
-                    }
-                    else {
-                        Array.Copy(items, 0, items, 1, count);
-                    }
-
-                    items[0] = item;
+                    items.Insert(0, item);
                     count += 1;
  
                     return this;
@@ -2014,13 +2009,7 @@ namespace Wintellect.PowerCollections
 
                 // Add into the current leaf, if possible.
                 if (count < MAXLEAF) {
-                    if (count == items.Length) {
-                        T[] newItems = new T[MAXLEAF];  
-                        Array.Copy(items, 0, newItems, 0, count);
-                        items = newItems;
-                    }
-
-                    items[count] = item;
+                    items.Insert(count, item);
                     count += 1;
                     return this;
                 }
@@ -2104,20 +2093,7 @@ namespace Wintellect.PowerCollections
 
                 // Insert into the current leaf, if possible.
                 if (count < MAXLEAF) {
-                    if (count == items.Length) {
-                        T[] newItems = new T[MAXLEAF];
-                        if (index > 0)
-                            Array.Copy(items, 0, newItems, 0, index);
-                        if (count > index)
-                            Array.Copy(items, index, newItems, index + 1, count - index);
-                        items = newItems;
-                    }
-                    else {
-                        if (count > index)
-                            Array.Copy(items, index, items, index + 1, count - index);
-                    }
-
-                    items[index] = item;
+                    items.Insert(index, item);
                     count += 1;
                     return this;
                 }
@@ -2133,12 +2109,12 @@ namespace Wintellect.PowerCollections
                     else {
                         // Split into two nodes, and put the new item at the end of the first.
                         T[] leftItems = new T[MAXLEAF];
-                        Array.Copy(items, 0, leftItems, 0, index);
+                        items.CopyTo(0, leftItems, 0, index);
                         leftItems[index] = item;
                         Node leftNode = new LeafNode(index + 1, leftItems);
 
                         T[] rightItems = new T[count - index];
-                        Array.Copy(items, index, rightItems, 0, count - index);
+                        items.CopyTo(index, rightItems, 0, count - index);
                         Node rightNode = new LeafNode(count - index, rightItems);
 
                         return new ConcatNode(leftNode, rightNode);
@@ -2169,17 +2145,7 @@ namespace Wintellect.PowerCollections
 
                 if (otherLeaf != null && (newCount = otherLeaf.Count + this.count) <= MAXLEAF) {
                     // Combine the two leaf nodes into one.
-                    if (newCount > items.Length) {
-                        T[] newItems = new T[MAXLEAF];
-                        Array.Copy(items, 0, newItems, 0, index);
-                        Array.Copy(otherLeaf.items, 0, newItems, index, otherLeaf.Count);
-                        Array.Copy(items, index, newItems, index + otherLeaf.Count, count - index);
-                        items = newItems;
-                    }
-                    else {
-                        Array.Copy(items, index, items, index + otherLeaf.Count, count - index);
-                        Array.Copy(otherLeaf.items, 0, items, index, otherLeaf.count);
-                    }
+                    items.InsertRange(index, otherLeaf.items);
                     count = newCount;
                     return this;
                 }
@@ -2195,11 +2161,11 @@ namespace Wintellect.PowerCollections
                     // Split existing node into two nodes at the insertion point, then concat all three nodes together.
 
                     T[] leftItems = new T[index];
-                    Array.Copy(items, 0, leftItems, 0, index);
+                    items.CopyTo(0, leftItems, 0, index);
                     Node leftNode = new LeafNode(index, leftItems);
 
                     T[] rightItems = new T[count - index];
-                    Array.Copy(items, index, rightItems, 0, count - index);
+                    items.CopyTo(index, rightItems, 0, count - index);
                     Node rightNode = new LeafNode(count - index, rightItems);
 
                     leftNode = leftNode.AppendInPlace(node, nodeIsUnused);
@@ -2228,9 +2194,9 @@ namespace Wintellect.PowerCollections
                 if (otherLeaf != null && (newCount = otherLeaf.Count + this.count) <= MAXLEAF) {
                     // Combine the two leaf nodes into one.
                     T[] newItems = new T[MAXLEAF];
-                    Array.Copy(items, 0, newItems, 0, index);
-                    Array.Copy(otherLeaf.items, 0, newItems, index, otherLeaf.Count);
-                    Array.Copy(items, index, newItems, index + otherLeaf.Count, count - index);
+                    items.CopyTo(0, newItems, 0, index);
+                    otherLeaf.items.CopyTo(0, newItems, index, otherLeaf.Count);
+                    items.CopyTo(index, newItems, index + otherLeaf.Count, count - index);
                     return new LeafNode(newCount, newItems);
                 }
                 else if (index == 0) {
@@ -2245,11 +2211,11 @@ namespace Wintellect.PowerCollections
                     // Split existing node into two nodes at the insertion point, then concat all three nodes together.
 
                     T[] leftItems = new T[index];
-                    Array.Copy(items, 0, leftItems, 0, index);
+                    items.CopyTo(0, leftItems, 0, index);
                     Node leftNode = new LeafNode(index, leftItems);
 
                     T[] rightItems = new T[count - index];
-                    Array.Copy(items, index, rightItems, 0, count - index);
+                    items.CopyTo(index, rightItems, 0, count - index);
                     Node rightNode = new LeafNode(count - index, rightItems);
 
                     leftNode = leftNode.AppendInPlace(node, nodeIsUnused);
@@ -2289,10 +2255,7 @@ namespace Wintellect.PowerCollections
                 if (last >= count)
                     last = count - 1;
                 int newCount = first + (count - last - 1);      // number of items remaining.
-                if (count > last + 1)
-                    Array.Copy(items, last + 1, items, first, count - last - 1);
-                for (int i = newCount; i < count; ++i)
-                    items[i] = default(T);
+                items.RemoveRange(first, (last - first) + 1);
                 count = newCount;
                 return this;
             }
@@ -2326,9 +2289,9 @@ namespace Wintellect.PowerCollections
                 int newCount = first + (count - last - 1);      // number of items remaining.
                 T[] newItems = new T[newCount];
                 if (first > 0)
-                    Array.Copy(items, 0, newItems, 0, first);
+                    items.CopyTo(0, newItems, 0, first);
                 if (count > last + 1)
-                    Array.Copy(items, last + 1, newItems, first, count - last - 1);
+                    items.CopyTo(last + 1, newItems, first, count - last - 1);
                 return new LeafNode(newCount, newItems);
             }
 
@@ -2357,7 +2320,7 @@ namespace Wintellect.PowerCollections
                         last = count - 1;
                     int n = last - first + 1;
                     T[] newItems = new T[n];
-                    Array.Copy(items, first, newItems, 0, n);
+                    items.CopyTo(first, newItems, 0, n);
                     return new LeafNode(n, newItems);
                 }
             }
@@ -2372,10 +2335,10 @@ namespace Wintellect.PowerCollections
                 // Check count and length of buffer.
                 Debug.Assert(count > 0);
                 Debug.Assert(items != null);
-                Debug.Assert(items.Length > 0);
+                Debug.Assert(items.Count > 0);
                 Debug.Assert(count <= MAXLEAF);
-                Debug.Assert(items.Length <= MAXLEAF);
-                Debug.Assert(count <= items.Length);
+                Debug.Assert(items.Count <= MAXLEAF);
+                Debug.Assert(count <= items.Count);
             }
 
             /// <summary>
@@ -2385,7 +2348,7 @@ namespace Wintellect.PowerCollections
             /// <param name="prefixChildren">Prefixed to use in front of children of this node.</param>
             public override void Print(string prefixNode, string prefixChildren)
             {
-                Console.Write("{0}LEAF {1} count={2}/{3} ", prefixNode, shared ? "S" : " ", count, items.Length);
+                Console.Write("{0}LEAF {1} count={2}/{3} ", prefixNode, shared ? "S" : " ", count, items.Count);
                 for (int i = 0; i < count; ++i)
                     Console.Write("{0} ", items[i]);
                 Console.WriteLine();
@@ -2585,17 +2548,7 @@ namespace Wintellect.PowerCollections
                 if (left.Count < MAXLEAF && !left.Shared && (leftLeaf = left as LeafNode) != null) {
                     // Prepend the item to the left leaf. This keeps repeated prepends from creating
                     // single item nodes.
-                    int c = leftLeaf.Count;
-                    if (c == leftLeaf.items.Length) {
-                        T[] newItems = new T[MAXLEAF];
-                        Array.Copy(leftLeaf.items, 0, newItems, 1, c);
-                        leftLeaf.items = newItems;
-                    }
-                    else {
-                        Array.Copy(leftLeaf.items, 0, leftLeaf.items, 1, c);
-                    }
-
-                    leftLeaf.items[0] = item;
+                    leftLeaf.items.Insert(0, item);
                     leftLeaf.count += 1;
                     this.count += 1;
                     return this;
@@ -2619,14 +2572,7 @@ namespace Wintellect.PowerCollections
 
                 LeafNode rightLeaf;
                 if (right.Count < MAXLEAF && !right.Shared && (rightLeaf = right as LeafNode) != null) {
-                    int c = rightLeaf.Count;
-                    if (c == rightLeaf.items.Length) {
-                        T[] newItems = new T[MAXLEAF];  // use MAXLEAF when appending, because we'll probably append again.
-                        Array.Copy(rightLeaf.items, 0, newItems, 0, c);
-                        rightLeaf.items = newItems;
-                    }
-
-                    rightLeaf.items[c] = item;
+                    rightLeaf.items.Add(item);
                     rightLeaf.count += 1;
                     this.count += 1;
                     return this;
