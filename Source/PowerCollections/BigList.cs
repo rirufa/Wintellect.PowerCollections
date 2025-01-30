@@ -7,6 +7,7 @@
 //******************************
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -61,6 +62,191 @@ namespace Wintellect.PowerCollections
             102334155, 165580141, 267914296, 433494437, 701408733, 1134903170, 1836311903, int.MaxValue};
         const int MAXFIB = 44;  // maximum index in the above, not counting the final MaxValue.
 
+        internal class LeafNodeEnumrator : IEnumerable<LeafNode>
+        {
+            public LeafNode FirstNode { get; set; }
+            public LeafNode LastNode { get; set; }
+
+            internal void Replace(LeafNode target, LeafNode replacementNode)
+            {
+                if (target == null)
+                    throw new ArgumentNullException("target");
+                if (replacementNode == null)
+                    throw new ArgumentNullException("replacementNode");
+                if (replacementNode.Next != null || replacementNode.Previous != null)
+                    throw new InvalidOperationException();
+
+                var priviousNode = target.Previous;
+                var nextNode = target.Next;
+                if (priviousNode != null && nextNode != null)
+                {
+                    replacementNode.Next = nextNode;
+                    replacementNode.Previous = priviousNode;
+                    priviousNode.Next = replacementNode;
+                    nextNode.Previous = replacementNode;
+                }
+                else if (priviousNode == null && nextNode != null)
+                {
+                    nextNode.Previous = replacementNode;
+                    replacementNode.Next = nextNode;
+                    FirstNode = replacementNode;
+                }
+                else if (priviousNode.Next != null && nextNode == null)
+                {
+                    replacementNode.Previous = priviousNode;
+                    priviousNode.Next = replacementNode;
+                    LastNode = replacementNode;
+                }
+            }
+
+            internal void AddLast(LeafNode newNode)
+            {
+                AddNext(LastNode, newNode);
+            }
+
+            internal void AddNext(LeafNode target,LeafNode newNode)
+            {
+                if (newNode == null)
+                    throw new ArgumentNullException("newNode");
+
+                if (newNode.Next != null || newNode.Previous != null)
+                    throw new InvalidOperationException();
+
+                if (target == null)
+                {
+                    Debug.Assert(FirstNode == null && LastNode == null);
+                    //どちらのnullの場合は何もないとする
+                    FirstNode = newNode;
+                    LastNode = newNode;
+                    return;
+                }
+
+                var nextNode = target.Next;
+
+                if (target.Next == null && target.Previous != null) //最後のノードかどうか
+                {
+                    target.Next = newNode;
+                    newNode.Previous = target;
+                    LastNode = newNode;
+                }
+                else if (target.Next != null && target.Previous != null)    //途中のノードかどうか
+                {
+                    newNode.Next = nextNode;
+                    newNode.Previous = target;
+                    target.Next = newNode;
+                }else if(target.Next != null && target.Previous == null)    //最初のノードかどうか
+                {
+                    newNode.Previous = target;
+                    newNode.Next = nextNode;
+                    target.Next = newNode;
+                }
+                else
+                {
+                    //ノードが一つしかない場合
+                    Debug.Assert(FirstNode != null && LastNode != null);
+                    target.Next = newNode;
+                    newNode.Previous = target;
+                    LastNode = newNode;
+                }
+            }
+
+            internal void AddBefore(LeafNode target, LeafNode newNode)
+            {
+                if (newNode == null)
+                    throw new ArgumentNullException("newNode");
+
+                if (newNode.Next != null || newNode.Previous != null)
+                    throw new InvalidOperationException();
+
+                if (target == null)
+                {
+                    Debug.Assert(FirstNode == null && LastNode == null);
+                    //どちらのnullの場合は何もないとする
+                    FirstNode = newNode;
+                    LastNode = newNode;
+                    return;
+                }
+
+                var nextNode = target.Next;
+                var previousNode = target.Previous;
+
+                if (target.Next == null && target.Previous != null) //最後のノードかどうか
+                {
+                    newNode.Next = target;
+                    newNode.Previous = previousNode;
+                    previousNode.Next = newNode;
+                    target.Previous = newNode;
+                }
+                else if (target.Next != null && target.Previous != null)    //途中のノードかどうか
+                {
+                    newNode.Next = target;
+                    newNode.Previous = previousNode;
+                    previousNode.Next = newNode;
+                    target.Previous = newNode;
+                }
+                else if (target.Next != null && target.Previous == null)    //最初のノードかどうか
+                {
+                    newNode.Next = target;
+                    target.Previous = previousNode;
+                    FirstNode = newNode;
+                }
+                else
+                {
+                    //ノードが一つしかない場合
+                    Debug.Assert(FirstNode != null && LastNode != null);
+                    target.Previous = newNode;
+                    newNode.Next = target;
+                    FirstNode = newNode;
+                }
+            }
+
+            internal void Remove(LeafNode node)
+            {
+                if (node == null)
+                    throw new ArgumentNullException("node");
+
+                var priviousNode = node.Previous;
+                var nextNode = node.Next;
+                if (priviousNode != null && nextNode != null)
+                {
+                    priviousNode.Next = nextNode;
+                    nextNode.Previous = priviousNode;
+                }
+                else if (priviousNode == null && nextNode != null)
+                {
+                    nextNode.Previous = null;
+                    FirstNode = nextNode;
+                }
+                else if (priviousNode.Next != null && nextNode == null)
+                {
+                    priviousNode.Next = null;
+                    LastNode = priviousNode;
+                }
+                node.Next = null;
+                node.Previous = null;
+            }
+
+            internal void Clear()
+            {
+                FirstNode = null;
+                LastNode = null;
+            }
+
+            public IEnumerator<LeafNode> GetEnumerator()
+            {
+                LeafNode node = FirstNode;
+                while(node != null)
+                {
+                    yield return node;
+                    node = node.Next;
+                }
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+        }
 
 
         // If null, the BigList is empty. If non-null, the list has at least one item.
@@ -1352,7 +1538,7 @@ namespace Wintellect.PowerCollections
         /// and Leaf nodes.
         /// </summary>
         [Serializable]
-        private abstract class Node
+        internal abstract class Node
         {
             // Number of items in this node.
             public int count;
@@ -1645,13 +1831,17 @@ namespace Wintellect.PowerCollections
         /// be less than "items.Length".
         /// </summary>
         [Serializable]
-        private sealed class LeafNode : Node
+        internal sealed class LeafNode : Node
         {
             /// <summary>
             /// Array that stores the items in the nodes. Always has a least "count" elements,
             /// but may have more as padding.
             /// </summary>
             public T[] items;
+
+            public LeafNode Next { get; set; }
+
+            public LeafNode Previous { get; set; }
 
             /// <summary>
             /// Creates a LeafNode that holds a single item.
@@ -2208,7 +2398,7 @@ namespace Wintellect.PowerCollections
         /// the left and right child nodes. Both children must always be non-null.
         /// </summary>
         [Serializable]
-        private sealed class ConcatNode : Node
+        internal sealed class ConcatNode : Node
         {
             /// <summary>
             /// The left and right child nodes. They are never null.
