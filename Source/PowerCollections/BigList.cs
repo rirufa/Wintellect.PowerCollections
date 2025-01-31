@@ -1256,6 +1256,7 @@ namespace Wintellect.PowerCollections
         /// </summary>
         /// <remarks>The rebalancing algorithm is from "Ropes: an Alternative to Strings", by 
         /// Boehm, Atkinson, and Plass, in SOFTWARE--PRACTICE AND EXPERIENCE, VOL. 25(12), 1315–1330 (DECEMBER 1995).
+        /// https://www.cs.tufts.edu/comp/150FP/archive/hans-boehm/ropes.pdf
         /// </remarks>
         internal void Rebalance()
         {
